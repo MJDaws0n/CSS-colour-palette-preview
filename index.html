@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSS Colour Palette Preview</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, system-ui, sans-serif;
+      background: #0b0d10;
+      color: #f4f7fb;
+      display: grid;
+      grid-template-columns: 420px 1fr;
+    }
+
+    aside {
+      border-right: 1px solid #252b33;
+      background: #111418;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: -0.03em;
+    }
+
+    p {
+      margin: 0;
+      color: #9aa4b2;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    textarea {
+      width: 100%;
+      flex: 1;
+      min-height: 420px;
+      resize: none;
+      border: 1px solid #252b33;
+      border-radius: 16px;
+      background: #0b0d10;
+      color: #f4f7fb;
+      padding: 16px;
+      font: 13px/1.5 "JetBrains Mono", "Fira Code", monospace;
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: #4f8cff;
+      box-shadow: 0 0 0 4px rgba(79, 140, 255, 0.15);
+    }
+
+    main {
+      padding: 24px;
+      overflow: auto;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .count {
+      color: #9aa4b2;
+      font-size: 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 14px;
+    }
+
+    .swatch {
+      min-height: 150px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.25);
+    }
+
+    .name {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      word-break: break-word;
+    }
+
+    .value {
+      font: 13px/1.4 "JetBrains Mono", "Fira Code", monospace;
+      opacity: 0.82;
+      word-break: break-word;
+    }
+
+    .empty {
+      color: #9aa4b2;
+      border: 1px dashed #252b33;
+      border-radius: 20px;
+      padding: 32px;
+      text-align: center;
+    }
+
+    @media (max-width: 850px) {
+      body {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        border-right: 0;
+        border-bottom: 1px solid #252b33;
+      }
+
+      textarea {
+        min-height: 280px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <aside>
+    <div>
+      <h1>CSS Palette Preview</h1>
+      <p>Paste your <code>:root</code> variables here. Only colour values will be shown.</p>
+    </div>
+
+    <textarea id="cssInput" spellcheck="false">:root {
+  --bg: #0b0d10;
+  --panel: #111418;
+  --panel-2: #171b21;
+  --border: #252b33;
+  --text: #f4f7fb;
+  --muted: #9aa4b2;
+  --accent: #4f8cff;
+  --accent-2: #7c5cff;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --space-1: 4px;
+}</textarea>
+  </aside>
+
+  <main>
+    <div class="toolbar">
+      <h1>Preview</h1>
+      <div class="count" id="count">0 colours</div>
+    </div>
+
+    <div class="grid" id="palette"></div>
+  </main>
+
+  <script>
+    const input = document.getElementById("cssInput");
+    const palette = document.getElementById("palette");
+    const count = document.getElementById("count");
+
+    const colourRegexes = [
+      /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i,
+      /^rgba?\(/i,
+      /^hsla?\(/i,
+      /^oklch\(/i,
+      /^oklab\(/i,
+      /^color\(/i,
+      /^transparent$/i,
+      /^currentColor$/i,
+      /^(black|white|red|blue|green|yellow|purple|pink|orange|gray|grey|cyan|magenta|lime|navy|teal|silver|maroon|olive)$/i
+    ];
+
+    function isColour(value) {
+      value = value.trim();
+      return colourRegexes.some(regex => regex.test(value));
+    }
+
+    function formatName(name) {
+      return name
+        .replace(/^--/, "")
+        .replace(/-/g, " ")
+        .replace(/\b\w/g, char => char.toUpperCase());
+    }
+
+    function getReadableTextColour(bg) {
+      const temp = document.createElement("div");
+      temp.style.color = bg;
+      document.body.appendChild(temp);
+
+      const computed = getComputedStyle(temp).color;
+      temp.remove();
+
+      const rgb = computed.match(/\d+/g);
+      if (!rgb || rgb.length < 3) return "#fff";
+
+      const [r, g, b] = rgb.map(Number);
+      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+      return brightness > 145 ? "#05070a" : "#ffffff";
+    }
+
+    function parseVariables(css) {
+      const matches = [...css.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)];
+
+      return matches
+        .map(match => ({
+          name: match[1].trim(),
+          value: match[2].trim()
+        }))
+        .filter(item => isColour(item.value));
+    }
+
+    function render() {
+      const colours = parseVariables(input.value);
+
+      count.textContent = `${colours.length} colour${colours.length === 1 ? "" : "s"}`;
+      palette.innerHTML = "";
+
+      if (!colours.length) {
+        palette.innerHTML = `<div class="empty">No colour variables found.</div>`;
+        return;
+      }
+
+      colours.forEach(colour => {
+        const card = document.createElement("div");
+        const textColour = getReadableTextColour(colour.value);
+
+        card.className = "swatch";
+        card.style.background = colour.value;
+        card.style.color = textColour;
+
+        card.innerHTML = `
+          <div class="name">${formatName(colour.name)}</div>
+          <div>
+            <div class="value">${colour.name}</div>
+            <div class="value">${colour.value}</div>
+          </div>
+        `;
+
+        palette.appendChild(card);
+      });
+    }
+
+    input.addEventListener("input", render);
+    render();
+  </script>
+</body>
+</html>
