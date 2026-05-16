@@ -171,7 +171,7 @@
     const input = document.getElementById("cssInput");
     const palette = document.getElementById("palette");
     const count = document.getElementById("count");
-
+  
     const colourRegexes = [
       /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i,
       /^rgba?\(/i,
@@ -183,39 +183,39 @@
       /^currentColor$/i,
       /^(black|white|red|blue|green|yellow|purple|pink|orange|gray|grey|cyan|magenta|lime|navy|teal|silver|maroon|olive)$/i
     ];
-
+  
     function isColour(value) {
       value = value.trim();
       return colourRegexes.some(regex => regex.test(value));
     }
-
+  
     function formatName(name) {
       return name
         .replace(/^--/, "")
         .replace(/-/g, " ")
         .replace(/\b\w/g, char => char.toUpperCase());
     }
-
+  
     function getReadableTextColour(bg) {
       const temp = document.createElement("div");
       temp.style.color = bg;
       document.body.appendChild(temp);
-
+  
       const computed = getComputedStyle(temp).color;
       temp.remove();
-
+  
       const rgb = computed.match(/\d+/g);
       if (!rgb || rgb.length < 3) return "#fff";
-
+  
       const [r, g, b] = rgb.map(Number);
       const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-
+  
       return brightness > 145 ? "#05070a" : "#ffffff";
     }
-
+  
     function parseVariables(css) {
       const matches = [...css.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)];
-
+  
       return matches
         .map(match => ({
           name: match[1].trim(),
@@ -223,26 +223,73 @@
         }))
         .filter(item => isColour(item.value));
     }
-
+  
+    function encodeStyles(css) {
+      return btoa(unescape(encodeURIComponent(css)))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+    }
+  
+    function decodeStyles(encoded) {
+      try {
+        encoded = encoded.replace(/-/g, "+").replace(/_/g, "/");
+  
+        while (encoded.length % 4) {
+          encoded += "=";
+        }
+  
+        return decodeURIComponent(escape(atob(encoded)));
+      } catch {
+        return null;
+      }
+    }
+  
+    function updateUrl() {
+      const encoded = encodeStyles(input.value);
+      const url = new URL(window.location.href);
+  
+      if (encoded.trim()) {
+        url.searchParams.set("css", encoded);
+      } else {
+        url.searchParams.delete("css");
+      }
+  
+      history.replaceState(null, "", url);
+    }
+  
+    function loadFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const encoded = params.get("css");
+  
+      if (!encoded) return;
+  
+      const decoded = decodeStyles(encoded);
+  
+      if (decoded) {
+        input.value = decoded;
+      }
+    }
+  
     function render() {
       const colours = parseVariables(input.value);
-
+  
       count.textContent = `${colours.length} colour${colours.length === 1 ? "" : "s"}`;
       palette.innerHTML = "";
-
+  
       if (!colours.length) {
         palette.innerHTML = `<div class="empty">No colour variables found.</div>`;
         return;
       }
-
+  
       colours.forEach(colour => {
         const card = document.createElement("div");
         const textColour = getReadableTextColour(colour.value);
-
+  
         card.className = "swatch";
         card.style.background = colour.value;
         card.style.color = textColour;
-
+  
         card.innerHTML = `
           <div class="name">${formatName(colour.name)}</div>
           <div>
@@ -250,13 +297,24 @@
             <div class="value">${colour.value}</div>
           </div>
         `;
-
+  
         palette.appendChild(card);
       });
     }
-
-    input.addEventListener("input", render);
+  
+    let urlTimeout;
+  
+    function handleInput() {
+      render();
+  
+      clearTimeout(urlTimeout);
+      urlTimeout = setTimeout(updateUrl, 120);
+    }
+  
+    loadFromUrl();
+    input.addEventListener("input", handleInput);
     render();
+    updateUrl();
   </script>
 </body>
 </html>
